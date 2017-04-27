@@ -40,7 +40,8 @@ library
     singletons,
     adjunctions,
     distributive,
-    typelits-witnesses
+    typelits-witnesses,
+    ghc-typelits-natnormalise
   default-extensions:
 
 source-repository head

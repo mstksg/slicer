@@ -17,6 +17,7 @@
 {-# LANGUAGE TypeInType #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -fplugin GHC.TypeLits.Normalise #-}
 
 module Slicer where
 
@@ -68,10 +69,10 @@ data CurrySing :: k1 -> k2 -> Type where
 mkLTE :: ProdMap CurrySing ns ms -> Maybe (ProdMap IsLTE ns ms)
 mkLTE = \case
     PMZ -> Just PMZ
-    CurrySing (n :: Sing n) (m :: Sing m) `PMS` pms -> case 
+    CurrySing (n@SNat :: Sing n) (m@SNat :: Sing m) `PMS` pms -> case 
     -- %<=? from http://hackage.haskell.org/package/typelits-witnesses-0.2.3.0/docs/GHC-TypeLits-Compare.html
      (Proxy @n) %<=? (Proxy @m) of
-       LE Refl -> IsLTE n m <$> mkLTE pms
+       LE Refl -> (IsLTE n m `PMS`) <$> mkLTE pms
        _       -> Nothing
 
 zipSings
@@ -91,15 +92,15 @@ headsFromList
     :: SingI ms
     => [Integer]
     -> Tensor ms a
-    -> (forall ns. SingI ns => Tensor ns a -> r)
-    -> r
+    -> (forall ns. SingI ns => Tensor ns a -> Either String r)
+    -> Either String r
 headsFromList ns t f = withSomeSing ns $ \nsSing ->
-                       withSingI nsSing $
-    case zipSings nsSing (sing @_ @_) of
-      Nothing -> error "dimensions don't line up"
-      Just nsms -> case mkLTE nsms of
-        Nothing -> error "dimensions out of range"
-        Just lte -> f (slice (sliceHeads lte) t)
+                       withSingI nsSing $ do
+    nsms <- maybe (Left "dimensions don't line up") Right $
+                zipSings nsSing sing
+    lte  <- maybe (Left "dimensions out of range") Right $
+                mkLTE nsms
+    f $ slice (sliceHeads lte) t
 
 newtype Tensor (r::[Nat]) a = Tensor { v :: V.Vector a }
     deriving (Functor, Eq, Foldable)
